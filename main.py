@@ -10,6 +10,8 @@ import nltk
 from functools import reduce
 from collections import Counter
 import torch.nn.functional as F
+from sklearn.metrics import f1_score
+
 
 import torch.utils.data as Data
 
@@ -86,7 +88,7 @@ class GRU_Regression(th.nn.Module):
 
         return logits
 
-def train(result_path, num_epoch=10, batch_size=64, seed=123456, visdom_port=8097):
+def train(result_path, num_epoch=12, batch_size=64, seed=123456, visdom_port=8097):
     th.manual_seed(seed)
     np.random.seed(seed)
 
@@ -99,7 +101,7 @@ def train(result_path, num_epoch=10, batch_size=64, seed=123456, visdom_port=809
     device = th.device("cpu")
 
     # mdoel generatation basic RNN
-    model = BasicRNN_Regression(input_size=24, state_size=512, num_class=18)
+    model = BasicRNN_Regression(input_size=18, state_size=512, num_class=18)
 
     # mdoel generatation GRU
     #model = GRU_Classification(input_size=284, state_size=512, num_class=1)
@@ -117,6 +119,10 @@ def train(result_path, num_epoch=10, batch_size=64, seed=123456, visdom_port=809
     X_test = pd.read_csv('MAKEathon-2020/preprocessed_data/ankle/X_ts_01.csv')
     y_train = pd.read_csv('MAKEathon-2020/preprocessed_data/ankle/Y_tr_01.csv')
     y_test = pd.read_csv('MAKEathon-2020/preprocessed_data/ankle/Y_ts_01.csv')
+    columns_to_drop = ['Xstd', 'Ystd', 'Zstd', 'Xmad', 'Ymad', 'Zmad']
+
+    X_train = X_train.drop(columns=columns_to_drop)
+    X_test = X_test.drop(columns=columns_to_drop)
 
     #y_ = (tuple(y_train['label']))
 
@@ -175,15 +181,20 @@ def train(result_path, num_epoch=10, batch_size=64, seed=123456, visdom_port=809
             idx = idx + 1
 
             print("Epoch", epoche, " Index", idx, "loss", loss_value.item())
-            time.sleep(0.2)
+
     oupt = model(X_test)
     n_items = len(y_test)
-    pred = oupt.view(n_items)  # all predicted as 1-d
-    sum_of_errors = th.sum(th.pow(pred.detach() - y_test, 2)).item()
+    print(len(oupt))
+    print(n_items)
+    #pred = oupt.view(n_items)  # all predicted as 1-d
+    sum_of_errors = th.sum(th.pow(oupt.detach() - y_test, 2)).item()
 
     y_sum = th.sum(y_test).item()
     y_sq_sum = th.sum(th.pow(y_test, 2)).item()
-    print(1 - sum_of_errors / (y_sq_sum - (y_sum ** 2) / n_items))
+    oupt = np.argmax(oupt.detach(), axis=1)
+    y_test= np.argmax(y_test, axis=1)
+    print('F1: {}'.format(f1_score(y_test, oupt, average="weighted")))
+
 
 if __name__ == "__main__":
     train(result_path="/tmp")
